@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline Dark Mode PDF Viewer</title>
+    <!-- Load PDF.js from a standard CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
+    <style>
+      body {
+        background-color: #121212;
+        color: #e0e0e0;
+        font-family: sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 20px;
+      }
+      #controls {
+        margin-bottom: 20px;
+      }
+      /* The CSS trick that forces Dark Mode safely */
+      canvas {
+        border: 1px solid #333;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        max-width: 100%;
+        /* Invert colors, then restore original hues so images look correct */
+        filter: invert(1) hue-rotate(180deg);
+      }
+      button,
+      input {
+        background-color: #333;
+        color: #fff;
+        border: 1px solid #555;
+        padding: 8px 12px;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Offline Dark Mode PDF Viewer</h2>
+
+    <div id="controls">
+      <input type="file" id="file-input" accept="application/pdf" />
+      <button id="prev-page">Previous</button>
+      <span
+        >Page: <span id="page-num">0</span> /
+        <span id="page-count">0</span></span
+      >
+      <button id="next-page">Next</button>
+    </div>
+
+    <canvas id="pdf-canvas"></canvas>
+
+    <script>
+      // Tell PDF.js where the worker script lives
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+
+      let pdfDoc = null,
+        pageNum = 1,
+        pageIsRendering = false,
+        pageNumIsPending = null;
+
+      const scale = 1.5,
+        canvas = document.getElementById("pdf-canvas"),
+        ctx = canvas.getContext("2d");
+
+      // Render the specific page
+      function renderPage(num) {
+        pageIsRendering = true;
+        document.getElementById("page-num").textContent = num;
+
+        pdfDoc.getPage(num).then((page) => {
+          const viewport = page.getViewport({ scale });
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport,
+          };
+
+          page.render(renderContext).promise.then(() => {
+            pageIsRendering = false;
+            if (pageNumIsPending !== null) {
+              renderPage(pageNumIsPending);
+              pageNumIsPending = null;
+            }
+          });
+        });
+      }
+
+      // Queue page rendering if a page is already loading
+      function queueRenderPage(num) {
+        if (pageIsRendering) {
+          pageNumIsPending = num;
+        } else {
+          renderPage(num);
+        }
+      }
+
+      // Load the PDF file selected by user locally
+      document.getElementById("file-input").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const fileReader = new FileReader();
+        fileReader.onload = function () {
+          const typedarray = new Uint8Array(this.result);
+
+          pdfjsLib.getDocument(typedarray).promise.then((pdf) => {
+            pdfDoc = pdf;
+            document.getElementById("page-count").textContent = pdf.numPages;
+            pageNum = 1;
+            renderPage(pageNum);
+          });
+        };
+        fileReader.readAsArrayBuffer(file);
+      });
+
+      // Navigation button logic
+      document.getElementById("prev-page").addEventListener("click", () => {
+        if (pageNum <= 1) return;
+        pageNum--;
+        queueRenderPage(pageNum);
+      });
+
+      document.getElementById("next-page").addEventListener("click", () => {
+        if (pageNum >= pdfDoc.numPages) return;
+        pageNum++;
+        queueRenderPage(pageNum);
+      });
+    </script>
+  </body>
+</html>

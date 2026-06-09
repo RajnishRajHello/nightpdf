@@ -60,17 +60,35 @@
       }
 
       /* ── TOP BAR ── */
-      #topbar {
-        flex-shrink: 0;
-        min-height: calc(var(--bar-h) + var(--safe-top));
-        background: var(--surface);
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 0 14px;
-        padding-top: var(--safe-top);
-      }
+     #topbar {
+  /* remove min-height; use max-height so we can animate collapse */
+  max-height: calc(var(--bar-h) + var(--safe-top));
+  overflow: hidden;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  padding-top: var(--safe-top);
+
+  transition:
+    max-height 220ms ease,
+    padding-top 220ms ease,
+    opacity 160ms ease,
+    transform 220ms ease,
+    border-bottom-width 160ms ease;
+  will-change: max-height, padding-top, transform, opacity;
+}
+
+#topbar.hidden {
+  max-height: 0;
+  padding-top: 0;
+  opacity: 0;
+  transform: translateY(-6px); /* small lift for nicer animation */
+  pointer-events: none;
+  border-bottom-width: 0;
+}
 
       #topbar-title {
         flex: 1;
@@ -211,7 +229,10 @@
       #pdf-wrap {
         display: none;
         flex-direction: column;
-        align-items: flex-start;
+        justify-content: center; 
+        /* Centers horizontally on the main axis */
+        align-items: center;
+        /* align-items: flex-start; */
         width: max-content;
         min-width: 100%;
         gap: 12px;
@@ -261,21 +282,7 @@
         color: #bbb;
       }
 
-      /* ── BOTTOM BAR ── */
-      #bottombar {
-        display: none;
-        flex-shrink: 0;
-        height: calc(var(--bottom-h) + var(--safe-bottom));
-        padding-bottom: var(--safe-bottom);
-        background: var(--surface);
-        border-top: 1px solid var(--border);
-        align-items: center;
-        justify-content: center;
-        padding-left: max(12px, env(safe-area-inset-left, 0px));
-        padding-right: max(12px, env(safe-area-inset-right, 0px));
-        gap: 10px;
-        position: relative;
-      }
+     
 
       #page-chip {
         min-width: 98px;
@@ -472,7 +479,7 @@
         opacity: 1;
       }
 
-      @media (max-width: 640px) {
+      @media (max-width: 940px) {
         :root {
           --bar-h: 60px;
           --bottom-h: 78px;
@@ -488,10 +495,7 @@
           font-size: 14px;
         }
 
-        .icon-btn {
-          width: 46px;
-          height: 46px;
-        }
+        
 
         #pdf-wrap {
           gap: 10px;
@@ -505,10 +509,10 @@
           box-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
         }
 
-        #bottombar {
+        /* #bottombar {
           justify-content: space-between;
           gap: 8px;
-        }
+        } */
 
         #page-chip {
           flex: 1;
@@ -540,8 +544,8 @@
       <!-- TOP BAR -->
       <div id="topbar">
         <span id="topbar-title">Dark mode PDF Viewer</span>
-        <label class="icon-btn accent" for="file-input" title="Open PDF"
-          >📂</label
+        <label class="accent open-pdf" for="file-input" title="Open PDF" style="background: gray; padding: 10px;"
+          >Open pdf</label
         >
         <input type="file" id="file-input" accept="application/pdf" />
         <button class="icon-btn" id="theme-btn" title="Toggle theme">🌙</button>
@@ -570,20 +574,7 @@
       </div>
       <!-- /scroll -->
 
-      <!-- BOTTOM BAR -->
-      <div id="bottombar">
-        <div id="page-progress"></div>
-        <button class="icon-btn" id="prev-page" title="Previous page" aria-label="Previous page">‹</button>
-        <button id="page-chip" type="button" aria-label="Go to page">— / —</button>
-        <button class="icon-btn" id="next-page" title="Next page" aria-label="Next page">›</button>
-        <button class="icon-btn" id="fs-btn" title="Fullscreen" aria-label="Fullscreen">⛶</button>
-      </div>
-      <div id="zoom-controls" aria-label="Zoom controls">
-        <button class="icon-btn" id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
-        <span id="zoom-label">100%</span>
-        <button class="icon-btn" id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
-      </div>
-    </div>
+      
     <!-- /app -->
 
     <!-- Fullscreen toolbar -->
@@ -611,6 +602,8 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
 
+        
+          
       // ── CONSTANTS ──
       const RENDER_BUFFER = 1;
       const DESTROY_DIST = 4;
@@ -640,7 +633,7 @@
       const $loading = document.getElementById("loading");
       const $loadTxt = document.getElementById("loading-text");
       const $pdfWrap = document.getElementById("pdf-wrap");
-      const $bottombar = document.getElementById("bottombar");
+      // const $bottombar = document.getElementById("bottombar");
       const $pageChip = document.getElementById("page-chip");
       const $pageProgress = document.getElementById("page-progress");
       const $prevPage = document.getElementById("prev-page");
@@ -652,6 +645,73 @@
       const $toast = document.getElementById("toast");
       const $themeBtn = document.getElementById("theme-btn");
       const $topTitle = document.getElementById("topbar-title");
+
+      const $topbarEl = document.getElementById('topbar');
+let lastScrollY = $scroll.scrollTop;
+let ticking = false;
+const HIDE_THRESHOLD = 8;
+
+$scroll.addEventListener('scroll', () => {
+  const current = $scroll.scrollTop;
+  if (!ticking) {
+    window.requestAnimationFrame(() => {
+      const dy = current - lastScrollY;
+      if (Math.abs(dy) > HIDE_THRESHOLD) {
+        // hide when scrolling down and not at very top; show when scrolling up
+        $topbarEl.classList.toggle('hidden', dy > 0 && current > 0);
+      }
+      lastScrollY = current;
+      ticking = false;
+    });
+    ticking = true;
+  }
+});
+
+    // -- Touch gestures: pinch-to-zoom and double-tap zoom --
+let pinchState = { active: false, startDist: 0, startZoom: 1 };
+let lastTap = 0;
+let lastTapPos = null;
+
+function getDist(t1, t2) {
+  const dx = t2.clientX - t1.clientX;
+  const dy = t2.clientY - t1.clientY;
+  return Math.hypot(dx, dy);
+}
+
+function onTouchStart(e) {
+  if (e.touches.length === 2) {
+    pinchState.active = true;
+    pinchState.startDist = getDist(e.touches[0], e.touches[1]);
+    pinchState.startZoom = zoomScale;
+  }
+}
+
+function onTouchMove(e) {
+  if (pinchState.active && e.touches.length === 2) {
+    const curDist = getDist(e.touches[0], e.touches[1]);
+    const factor = curDist / Math.max(1, pinchState.startDist);
+    const next = clampZoom(pinchState.startZoom * factor);
+    applyZoom(next);
+    e.preventDefault(); // requires passive:false on listener
+  }
+}
+
+function onTouchEnd(e) {
+  if (pinchState.active && e.touches.length < 2) {
+    pinchState.active = false;
+  }
+
+}
+
+// Attach to main scroll containers. We use passive:false so preventDefault() works for pinch.
+const scrollers = [$scroll, $pdfWrap];
+scrollers.forEach((el) => {
+  if (!el) return;
+  el.addEventListener("touchstart", onTouchStart, { passive: true });
+  el.addEventListener("touchmove", onTouchMove, { passive: false });
+  el.addEventListener("touchend", onTouchEnd, { passive: true });
+  el.addEventListener("touchcancel", () => (pinchState.active = false), { passive: true });
+});
 
       // ── THEME ──
       isLight = localStorage.getItem("theme") === "light";
@@ -680,15 +740,13 @@
         $empty.style.display = name === "empty" ? "flex" : "none";
         $loading.style.display = name === "loading" ? "flex" : "none";
         $pdfWrap.style.display = name === "pdf" ? "flex" : "none";
-        $bottombar.style.display = name === "pdf" ? "flex" : "none";
-        $zoomControls.style.display = name === "pdf" ? "flex" : "none";
-        if (name !== "pdf") $pageProgress.style.width = "0%";
+       
       }
       showPanel("empty");
 
       // ── SCALE ──
       function getAvailablePageWidth() {
-        const pageGutter = window.innerWidth <= 640 ? 12 : 16;
+        const pageGutter = window.innerWidth <= 940 ? 12 : 16;
         return Math.min(window.innerWidth - pageGutter, 900);
       }
       function getScaleForPage(pageWidth) {
@@ -722,14 +780,7 @@
       // ── FULLSCREEN ──
       const $fsBtn = document.getElementById("fs-btn");
       const $fsExit = document.getElementById("fs-exit");
-      $fsBtn.addEventListener("click", () => {
-        $pdfWrap.classList.add("fullscreen");
-        document.body.classList.add("fullscreen-active");
-        if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {});
-        }
-        reconnectObserver();
-      });
+   
       $fsExit.addEventListener("click", () => {
         if (document.fullscreenElement) document.exitFullscreen();
         else {
@@ -748,15 +799,8 @@
       // ── PAGE JUMP MODAL ──
       const $overlay = document.getElementById("page-jump-overlay");
       const $jumpIn = document.getElementById("page-jump-input");
-      $pageChip.addEventListener("click", () => {
-        if (!pdfDoc) return;
-        $jumpIn.max = pdfDoc.numPages;
-        $jumpIn.value = "";
-        document.getElementById("jump-label").textContent =
-          `Go to page (1–${pdfDoc.numPages})`;
-        $overlay.classList.add("open");
-        setTimeout(() => $jumpIn.focus(), 100);
-      });
+      // $pageChip.addEventListener("click", () => {
+     
       document
         .getElementById("jump-cancel")
         .addEventListener("click", () => $overlay.classList.remove("open"));
@@ -767,14 +811,7 @@
       $overlay.addEventListener("click", (e) => {
         if (e.target === $overlay) $overlay.classList.remove("open");
       });
-      $prevPage.addEventListener("click", () => {
-        if (!pdfDoc) return;
-        scrollToPage(Math.max(1, getCurrentPage() - 1));
-      });
-      $nextPage.addEventListener("click", () => {
-        if (!pdfDoc) return;
-        scrollToPage(Math.min(pdfDoc.numPages, getCurrentPage() + 1));
-      });
+    
       function doJump() {
         const p = parseInt($jumpIn.value);
         if (!p || p < 1 || p > pdfDoc.numPages) {
@@ -782,12 +819,9 @@
           return;
         }
         $overlay.classList.remove("open");
-        scrollToPage(p);
+        
       }
-      function scrollToPage(pageNum) {
-        const w = wrappers[pageNum - 1];
-        if (w) w.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      
       function clampZoom(value) {
         return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
       }
@@ -826,8 +860,8 @@
         $zoomOut.disabled = zoomScale <= MIN_ZOOM;
         $zoomIn.disabled = zoomScale >= MAX_ZOOM;
       }
-      $zoomOut.addEventListener("click", () => applyZoom(zoomScale - ZOOM_STEP));
-      $zoomIn.addEventListener("click", () => applyZoom(zoomScale + ZOOM_STEP));
+      // $zoomOut.addEventListener("click", () => applyZoom(zoomScale - ZOOM_STEP));
+      // $zoomIn.addEventListener("click", () => applyZoom(zoomScale + ZOOM_STEP));
       function getCurrentPage() {
         if (visiblePages.size) return Math.min(...visiblePages);
         const scrollTop = $pdfWrap.classList.contains("fullscreen")
@@ -917,10 +951,7 @@
         }
 
         showPanel("pdf");
-        $prevPage.disabled = true;
-        $nextPage.disabled = pdfDoc.numPages <= 1;
-        $pageProgress.style.width = pdfDoc.numPages <= 1 ? "100%" : "1%";
-        updateZoomControls();
+     
         reconnectObserver();
       }
 
@@ -943,29 +974,14 @@
               else visiblePages.delete(p);
             });
             scheduleRender();
-            updatePageChip();
+            // updatePageChip();
           },
           { root, rootMargin: "200px", threshold: 0 },
         );
         wrappers.forEach((w) => observer.observe(w));
       }
 
-      // ── PAGE CHIP UPDATE ──
-      function updatePageChip() {
-        if (!pdfDoc || !visiblePages.size) return;
-        const sorted = [...visiblePages].sort((a, b) => a - b);
-        const first = sorted[0],
-          last = sorted[sorted.length - 1];
-        $pageChip.textContent =
-          first === last
-            ? `${first} / ${pdfDoc.numPages}`
-            : `${first}–${last} / ${pdfDoc.numPages}`;
-        const current = first;
-        $prevPage.disabled = current <= 1;
-        $nextPage.disabled = last >= pdfDoc.numPages;
-        $pageProgress.style.width =
-          `${Math.max(1, Math.round((last / pdfDoc.numPages) * 100))}%`;
-      }
+     
 
       // ── SCHEDULER ──
       function scheduleRender() {
@@ -1073,15 +1089,8 @@
         renderState[pageNum] = "idle";
       }
 
-      // ── RESPONSIVE RESIZE ──
-      let resizeT;
-      window.addEventListener("resize", () => {
-        clearTimeout(resizeT);
-        resizeT = setTimeout(() => {
-          if (!pdfDoc) return;
-          rerender();
-        }, 250);
-      });
+    
+      
     </script>
   </body>
 </html>

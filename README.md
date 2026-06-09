@@ -1,0 +1,7 @@
+- No need to stress your eyes in white pdf.
+- I have a solution.
+- You  can read your pdf in dark mode.
+- It basical inverts the colour.
+- White background becomes black and black text becomes white.
+- Thats why a drawback - it also inverts the color of image.
+- You can toggle to light mode while looking into image from the button available in the top right corner.
